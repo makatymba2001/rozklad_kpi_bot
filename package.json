@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "moment-timezone": "^0.5.34",
+    "node-fetch": "^2.6.7",
+    "node-html-parser": "^5.3.3",
+    "node-telegram-bot-api": "^0.56.0",
+    "pg": "^8.7.3",
+    "request": "^2.88.2"
+  }
+}
