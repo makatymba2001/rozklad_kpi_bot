@@ -2,6 +2,7 @@ import { TelegramBot } from "node-telegram-bot-api"
 import { Group } from "./group-data-manager"
 import { Client } from 'pg'
 import { Moment } from "moment-timezone"
+import { MessageChain } from "./utils"
 
 type ChatToggleKey = 'hide_teachers' | 'ignore_links' | 'before_notification' | 'now_notifications'
 
@@ -45,9 +46,9 @@ declare class Chat {
     unbind(user_id: string | number, checked?: boolean): Promise<void>
     toggle(user_id: string | number, key: ChatToggleKey, value?: boolean): Promise<void>
 
-    sendSettings(user_id: string | number, message_id?: string | number, query_id?: string | number, checked?: boolean): Promise<void>
-    sendBind(user_id: string | number, group_data: Group, message_id?: string | number, query_id?: string | number, checked?: boolean): Promise<void>
-    sendLinksDelete(lesson_hash: string, message_id?: string | number): Promise<void>
+    sendSettings(messager: MessageChain, user_id: string | number, query_id?: string | number, checked?: boolean): Promise<void>
+    sendBind(messager: MessageChain, group_data: Group, user_id: string | number, query_id?: string | number, checked?: boolean): Promise<void>
+    sendLinksDelete(lesson_hash: string, messager: MessageChain): Promise<void>
 
     isAdmin(user_id: string | number): Promise<boolean>
 
@@ -56,7 +57,7 @@ declare class Chat {
     removeTempLink(link_id: string | number): Promise<void>
     applyTempLink(link_id: string | number, link_date: string | number): Promise<void>
     applyPermLink(link_id: string | number, link_date: string | number, link_title: string): Promise<void>
-    deleteLink(lesson_hash: string, link_index: string, message_id: string | number): Promise<void>
+    deleteLink(lesson_hash: string, link_index: string, messager: MessageChain): Promise<void>
     setLinksParent(parent_id: string | number): Promise<void>
 
     save(): Promise<void>

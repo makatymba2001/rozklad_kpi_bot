@@ -267,7 +267,6 @@ function formatNextDayLessons(schedule_data, group_data, chat_data){
         text: `Наступний робочий день для групи ${group_data.group_name} не було знайдено.`,
         options: {
             parse_mode: 'HTML',
-            reply_markup: keyboard
         }
     }
     return {

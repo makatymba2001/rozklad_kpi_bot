@@ -143,8 +143,7 @@ class Chat{
 
     //---------------------------
 
-    async sendSettings(user_id, message_id, query_id, checked = false){
-        let messager = new MessageChain(this.manager.bot, this.chat_id, message_id);
+    async sendSettings(messager, user_id, query_id, checked = false){
         if (!checked && !await this.isAdmin(user_id)) {
             return void await query_id ?
             messager.bot.answerCallbackQuery(query_id, {
@@ -174,16 +173,6 @@ class Chat{
                 text: this.chat_now_notifications ? "Не надсилати оповіщення про початок пар" : "Надсилати оповіщення про початок пар",
                 callback_data: createCallbackData('now_notifications')
             }],
-            // [
-            //     {
-            //         text: "Опов. перед початком пар",
-            //         callback_data: createCallbackData('before_notifications')
-            //     },
-            //     {
-            //         text: "Опов. про початок пар",
-            //         callback_data: createCallbackData('now_notifications')
-            //     }
-            // ],
             [{
                 text: this.chat_ignore_links ? "Помічати посилання" : "Не помічати посилання",
                 callback_data: createCallbackData('ignore_links')
@@ -205,8 +194,7 @@ class Chat{
             }
         })
     }
-    async sendBind(user_id, group_data, message_id, query_id, checked = false){
-        let messager = new MessageChain(this.manager.bot, this.chat_id, message_id);
+    async sendBind(messager, group_data, user_id, query_id, checked = false){
         if (!checked && !await this.isAdmin(user_id)) {
             return void await query_id ?
             messager.bot.answerCallbackQuery(query_id, {
@@ -217,8 +205,7 @@ class Chat{
         await this.bind(user_id, group_data, true)
         return void await messager.send('Група успішно змінена на ' + group_data.group_name + '.');
     }
-    async sendLinksDelete(lesson_hash, message_id){
-        let messager = new MessageChain(this.manager.bot, this.chat_id, message_id || null);
+    async sendLinksDelete(lesson_hash, messager){
         if (!lesson_hash) return void await messager.send('Зараз ніякої пари немає.')
         let chat_links = this.getLinks(lesson_hash);
         let inline_keyboard = [];
@@ -229,7 +216,7 @@ class Chat{
                 callback_data: createCallbackData('link_delete', {lesson_hash, link_index})
             }])
         })
-        if (!inline_keyboard.length) return void await messager.send(message_id ? "На цю пару посилань більше немає." : 'На цю пару посилань немає.')
+        if (!inline_keyboard.length) return void await messager.send(messager.message_id ? "На цю пару посилань більше немає." : 'На цю пару посилань немає.')
         inline_keyboard.push([{
             text: 'Закрити це меню',
             callback_data: 'close'
@@ -288,12 +275,12 @@ class Chat{
         delete this.chat_links_data.temp[link_id]
         return await this.save();
     }
-    async deleteLink(lesson_hash, link_index, message_id){
+    async deleteLink(lesson_hash, link_index, messager){
         let links_data = this.getLinks(lesson_hash);
         if (!links_data) return;
         links_data.splice(+link_index, 1);
         await this.save();
-        return await this.sendLinksDelete(lesson_hash, message_id);
+        return await this.sendLinksDelete(lesson_hash, messager);
     }
 
     getLinks(lesson_hash, filter = false, parent = false){

@@ -34,15 +34,14 @@ let last_now_notif_date = null;
 
 function errorCatcher(error, messager){
     console.log(error.stack)
+    bot.sendMessage(owner_id, `Виникла помилка!\n<pre>` + error.stack.replace(/\</g, '&lt;').replace(/\>/g, '&gt;').replace(/\&/g, '&amp;') + '</pre>', {parse_mode: 'HTML'});
     if (!messager || !messager instanceof MessageChain) return;
     switch (error.message){
         case 'Group name not provided': return void messager.send('Група не була вказана.\nОбрати групу за замовчуванням: /bind');
         case 'Group not found': return void messager.send('Групу не було знайдено.');
         case 'Connection to http://rozklad.kpi.ua failed': return void messager.send('Не вдалося зв\'язатися з http://rozklad.kpi.ua');
         case 'Connection timeout to http://rozklad.kpi.ua': return void messager.send('http://rozklad.kpi.ua занадто довго відповідає');
-        default: 
-            bot.sendMessage(owner_id, `Виникла помилка!\n<pre>` + error.stack.replace(/\</g, '&lt;').replace(/\>/g, '&gt;').replace(/\&/g, '&amp;') + '</pre>', {parse_mode: 'HTML'})
-            return void messager.send('Виникла помилка у роботі боту.');
+        default: return void messager.send('Виникла помилка у роботі боту.');
     }
 }
 function addCommandCount(user_id){
@@ -271,10 +270,11 @@ Object.keys(KEY_GETTERS).forEach(k => {
 })
 bot.onText(/^\/bind(?:$|@)/, msg => {
     if (!isMyCommand(msg)) return;
+    let messager = new MessageChain(bot, msg.chat.id)
     cmanager.get(msg.chat.id).isAdmin(msg.from.id)
     .then(b => {
-        if (!b) return void bot.sendMessage(msg.chat.id, '⚠️ Для цього потрібно мати права адміністратора у цьому чаті.');
-        return void  bot.sendMessage(msg.chat.id, 'Введіть назву групи, яку хочете обрати за замовчуванням.', {
+        if (!b) return messager.send('⚠️ Для цього потрібно мати права адміністратора у цьому чаті.');
+        return messager.send('Введіть назву групи, яку хочете обрати за замовчуванням.', {
             reply_to_message_id: msg.message_id,
             reply_markup: {
                 force_reply: true,
@@ -282,26 +282,27 @@ bot.onText(/^\/bind(?:$|@)/, msg => {
                 input_field_placeholder: 'Назва групи'
             }
         });
-    }).catch(e => errorCatcher(e, msg))
+    }).catch(e => errorCatcher(e, messager))
 })
 bot.onText(/^\/unbind(?:$|@)/, msg => {
     if (!isMyCommand(msg)) return;
+    let messager = new MessageChain(bot, msg.chat.id)
     let chat_data = cmanager.get(msg.chat.id);
     chat_data.isAdmin(msg.from.id)
     .then(b => {
-        if (!b) return void bot.sendMessage(msg.chat.id, '⚠️ Для цього потрібно мати права адміністратора у цьому чаті.');
-        if (!chat_data.chat_group_name) return void bot.sendMessage(msg.chat.id, 'У цьому чаті вже немає обраної групи.');
+        if (!b) return messager.send('⚠️ Для цього потрібно мати права адміністратора у цьому чаті.');
+        if (!chat_data.chat_group_name) return messager.send('У цьому чаті вже немає обраної групи.');
         chat_data.unbind(msg.from.id, null, true)
         .then(() => {
-            return void bot.sendMessage(msg.chat.id, 'Група успішно прибрана.');
-        }, e => errorCatcher(e, msg))
+            return messager.send('Група успішно прибрана.');
+        }, e => errorCatcher(e, messager))
     })
-    .catch(e => errorCatcher(e, msg))
+    .catch(e => errorCatcher(e, messager))
 })
 bot.onText(/^\/settings(?: |$|@)/, msg => {
     if (!isMyCommand(msg)) return;
     addCommandCount(msg.from.id);
-    cmanager.get(msg.chat.id).sendSettings(msg.from.id)
+    cmanager.get(msg.chat.id).sendSettings(new MessageChain(bot, msg.chat.id), msg.from.id)
     .catch(errorCatcher);
 })
 
@@ -312,7 +313,7 @@ bot.onText(/^\/links_delete(?:$|@)/, msg => {
     let chat_data = cmanager.get(msg.chat.id);
     let current_lesson = gmanager.get(chat_data.chat_group_name).getCurrentLesson().current_lesson;
     if (!current_lesson) return; // Если нет пары - конец
-    chat_data.sendLinksDelete(current_lesson.lesson_hash).catch(e => errorCatcher(e, msg))
+    chat_data.sendLinksDelete(current_lesson.lesson_hash, new MessageChain(bot, msg.chat.id)).catch(errorCatcher)
 })
 bot.onText(/^\/links_share(?:$|@)/, msg => {
     if (msg.chat.id > 0) return void bot.sendMessage(msg.chat.id,
@@ -525,26 +526,26 @@ bot.on('callback_query', query => {
                 return gmanager.getGroupDataWithNotif(messager, {
                     group_name: splitted[1],
                     onGroupFound: group_data => {
-                        chat_data.sendBind(query.from.id, group_data, query.message.message_id, query.id, true)
+                        chat_data.sendBind(messager, group_data, query.from.id, query.id, true)
                         .catch(e => errorCatcher(e, messager))
                     }
                 })
             }).catch(e => errorCatcher(e, messager))
             break;
         case 'settings':
-            chat_data.sendSettings(query.from.id, query.message.message_id, query.id)
+            chat_data.sendSettings(messager, query.from.id, query.id)
             .catch(e => errorCatcher(e, messager))
             break;
         case 'toggle':
             chat_data.toggle(query.from.id, splitted[1])
             .then(() => {
-                chat_data.sendSettings(query.from.id, query.message.message_id, query.id, true)
+                chat_data.sendSettings(messager, query.from.id, query.id, true)
                 .catch(e => errorCatcher(e, messager));
             }, e => {
                 if (e.message === 'Forbidden') return void bot.answerCallbackQuery(query.id, {
                     text: '⚠️ Для цього потрібно мати права адміністратора у цьому чаті.'
                 })
-                console.log(e.stack)
+                errorCatcher(e, messager)
             })
             break;
         case 'link_temp':
@@ -566,7 +567,6 @@ bot.on('callback_query', query => {
                     let link_title = msg.text.replace(/\|/g, '');
                     if (link_title.length > 24) return void bot.sendMessage(msg.chat.id, "Назва занадто довга!");
                     bot.removeReplyListener(listener);
-                    console.log(splitted[1], splitted[2], link_title)
                     Promise.allSettled([
                         cmanager.get(msg.chat.id).applyPermLink(splitted[1], splitted[2], link_title),
                         bot.deleteMessage(msg.chat.id, query.message.message_id),
@@ -578,7 +578,7 @@ bot.on('callback_query', query => {
                             }
                         })
                     })
-                    .catch(e => errorCatcher(e, msg))
+                    .catch(e => errorCatcher(e, messager))
                 })
                 bot.editMessageText('Щоб відмінити дію, натисніть кнопку нижче.', {
                     chat_id: query.message.chat.id,
@@ -594,25 +594,25 @@ bot.on('callback_query', query => {
                             }
                         ]]
                     }
-                })
+                }).catch(e => errorCatcher(e, messager))
             })
             break;
         case 'link_cancel':
             chat_data.removeTempLink(splitted[1])
             .then(() => {
                 bot.deleteMessage(query.message.chat.id, query.message.message_id)
-            }).catch(e => errorCatcher(e, msg));
+            }).catch(e => errorCatcher(e, messager));
             break;
         case 'link_cancel_perm':
             Promise.allSettled([
                 chat_data.removeTempLink(splitted[1]),
                 bot.deleteMessage(query.message.chat.id, query.message.message_id),
                 bot.deleteMessage(query.message.chat.id, splitted[2]),
-            ]).catch(e => errorCatcher(e, msg))
+            ]).catch(e => errorCatcher(e, messager))
             break;
         case 'link_delete':
-            chat_data.deleteLink(splitted[1], splitted[2], query.message.message_id)
-            .catch(e => errorCatcher(e, msg))
+            chat_data.deleteLink(splitted[1], splitted[2], messager)
+            .catch(e => errorCatcher(e, messager))
             break;
         case 'links_parent':
             bot.sendMessage(query.from.id, 'Посилання з групового чату перенесені успішно.')
@@ -623,7 +623,7 @@ bot.on('callback_query', query => {
                     text: '⚠️ Ви не працювали зі мною.',
                     url: 't.me/RozkladKpiTest_bot?start=' + query.message.chat.id
                 })
-                console.log(e.stack)
+                errorCatcher(e, messager)
             })
             break;
         case 'links_parent_delete':
@@ -638,9 +638,9 @@ bot.on('callback_query', query => {
             })
             .then(r => {
                 if (r === null) return;
-                return chat_data.sendSettings(query.from.id, query.message.message_id, query.id, true)
+                return chat_data.sendSettings(messager, query.from.id, query.id, true)
             })
-            .catch(e => errorCatcher(e, msg))
+            .catch(e => errorCatcher(e, messager))
             break;
     }
 })
@@ -716,7 +716,7 @@ bot.onText(/^\/admin(?: |$|@)/, msg => {
     last_check_count = total_commands_count;
     last_check_date = new Date();
     client.query('UPDATE overall_data SET (total_commands_count, last_check_date, last_check_count) = ($1, $2, $3)', [total_commands_count, last_check_date, last_check_count])
-    .catch(e => errorCatcher(e, msg))
+    .catch(errorCatcher)
 })
 bot.onText(/^\/adminstat(?: |$|@)/, msg => {
     if (msg.from.id != owner_id) return;
@@ -861,7 +861,7 @@ Object.entries(regexp_patterns).forEach(([k, pattern]) => {
             let {text, options} = formatScheduleData(k, result.schedule_data, result.group_data, chat_data, chat_data.chat_hide_teachers);
             return messager.send(text, Object.assign(options, {reply_to_message_id: msg.message_id}))
         })
-        .catch(e => errorCatcher(e))
+        .catch(errorCatcher)
     })
 })
 
